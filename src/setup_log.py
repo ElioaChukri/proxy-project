@@ -1,6 +1,9 @@
 import logging
 from logging.handlers import RotatingFileHandler
 
+LOG_LEVEL = logging.INFO
+FORMAT='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+DATEFMT='%Y-%m-%d %H:%M:%S'
 
 def setup_logging() -> None:
     """
@@ -13,8 +16,8 @@ def setup_logging() -> None:
     """
     try:
         log_formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            FORMAT,
+            datefmt=DATEFMT
         )
 
         # Rotating file handler
@@ -30,25 +33,25 @@ def setup_logging() -> None:
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(log_formatter)
         logging.basicConfig(
-            level=logging.DEBUG,
+            level=LOG_LEVEL,
             handlers=[file_handler, console_handler]
         )
 
     except FileNotFoundError as e:
         # Fallback to console-only logging
         logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            level=LOG_LEVEL,
+            format=FORMAT,
+            datefmt=DATEFMT
         )
         logging.error("File logging setup failed. Falling back to console-only logging. Error: %s", e)
 
     except PermissionError as e:
         # Fallback to console-only logging
         logging.basicConfig(
-            level=logging.DEBUG,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
+            level=LOG_LEVEL,
+            format=FORMAT,
+            datefmt=DATEFMT
         )
         logging.error("File logging setup failed. Falling back to console-only logging. Error: %s", e)
 
