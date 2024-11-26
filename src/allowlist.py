@@ -31,22 +31,15 @@ def _load_list(filepath: str) -> set[str]:
         return set()
 
 
-def _match_ip(address: str, cidr: str) -> bool:
+def _load_cidr(addresses: set[str]) -> set[IPv4Network]:
     """
-    Check if an IP address matches a CIDR range.
-    :param address: The IP address to check.
-    :param cidr: The CIDR range to check against.
-    :return: True if the IP address is in the CIDR range, False otherwise.
+    Loads a list of CIDR ranges from a file into a set.
+
+    Checks if the entry has '/' in it and then processes it as CIDR
+    :param addresses: A set of non-empty strings containing potential CIDR ranges
+    :return: A set of non-empty strings representing the CIDR ranges.
     """
-
-    try:
-        network: IPv4Network = ipaddress.ip_network(cidr, strict=False)
-        ip_address: IPv4Address = ipaddress.ip_address(address)
-        return ip_address in network  # Check if the IP address is in the network
-
-    # If the CIDR range is invalid, return False
-    except ValueError:
-        return False
+    return {ipaddress.ip_network(addr, strict=False) for addr in addresses if '/' in addr}
 
 
 class AccessControl:
@@ -56,6 +49,8 @@ class AccessControl:
         """
         self._whitelist = _load_list('../whitelist.txt')
         self._blacklist = _load_list('../blacklist.txt')
+        self._whitelist_cidr = _load_cidr(self._whitelist)
+        self._blacklist_cidr = _load_cidr(self._blacklist)
 
     def is_allowed(self, domain_or_ip: str) -> bool:
         """
@@ -76,24 +71,30 @@ class AccessControl:
 
         # If it's an IP, we check against IPs and CIDR ranges
         if is_ip:
-            ip = domain_or_ip
+            ip: str = domain_or_ip
+            ipv4: IPv4Address = ipaddress.ip_address(ip)
             for address in self._whitelist:  # Whitelist takes precedence
-                if ip == address or _match_ip(ip, address):
+                if ip == address or any(ipv4 in cidr for cidr in self._whitelist_cidr):
+                    logger.debug(f'IP {ip} is whitelisted')
                     return True
 
             for address in self._blacklist:
-                if ip == address or _match_ip(ip, address):
+                if ip == address or any(ipv4 in cidr for cidr in self._blacklist_cidr):
+                    logger.debug(f'IP {ip} is blacklisted')
                     return False
 
         # It's a domain, direct check against domains
         else:
             domain = domain_or_ip
             if domain in self._whitelist:
+                logger.debug(f'DOMAIN {domain} is whitelisted')
                 return True
 
             if domain in self._blacklist:
+                logger.debug(f'DOMAIN {domain} is blacklisted')
                 return False
 
+        logger.debug(f'{domain_or_ip} is not in either list, allowing by default')
         return True  # Default to allowing access if not found in either list
 
 
@@ -107,7 +108,7 @@ if __name__ == '__main__':
     setup_logging()
 
     # Example usage
-    test = '192.168.1.2'
+    test = 'lau.edu.lb'
     if access_control.is_allowed(test):
         logger.debug(f'{test} is allowed')
     else:
