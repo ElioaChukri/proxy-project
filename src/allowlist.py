@@ -62,9 +62,9 @@ class AccessControl:
             self._whitelist_cidr = _load_cidr(self._whitelist)
             self._blacklist_cidr = _load_cidr(self._blacklist)
         except ValueError:
-            logger.error("Invalid entries found in whitelist/blacklist files. Make sure to only use IP addresses, CIDR ranges, and hostnames (without http:// or https://")
+            logger.error(
+                "Invalid entries found in whitelist/blacklist files. Make sure to only use IP addresses, CIDR ranges, and hostnames (without http:// or https://")
             exit(1)
-
 
     def is_allowed(self, domain_or_ip: str) -> bool:
         """

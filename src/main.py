@@ -1,6 +1,7 @@
 import logging
-from setup_log import setup_logging
+
 from allowlist import access_control
+from setup_log import setup_logging
 
 if __name__ == '__main__':
 
