@@ -1,53 +1,46 @@
-# Author: Ghady Nasrallah
-
 import socket
 import threading
-from setup_log import setup_logging
-import logging
-from allowlist import access_control
 
 BUFFER_SIZE = 4096
-HOST_IP = '127.0.0.1'
-PORT_NUMBER = 12345
-TIMEOUT_INTERVAL = 10  # This is the timeout used for all sockets in seconds
+HOST = '127.0.0.1'
+PORT = 12345
+SOCKET_TIMEOUT = 10  # Timeout in seconds for all sockets
+CACHE_TIMEOUT = 60 # Cache expiration time in seconds (for simplicity)
 
-logger = logging.getLogger('proxyserver')
-
+# In-memory cache to store the responses
+cache = {}
 
 def handle_client(client_socket):
     """
-    This function handles incoming client requests. It processes both HTTP and HTTPS traffic
-    by adding the client's request, determining the target server and establishing a connection with it
-    in order to forward the request to it.
-    For HTTPS requests, it sets up a secure tunnel to forward encrypted traffic without decrypting it.
-    For HTTP requests, it forwards the client's request to the target server, retrieves the response,
+    This function handles incoming client requests. It processes both HTTP and HTTPS traffic 
+    by parsing the client's request, determining the target server, and establishing a connection to it. 
+    For HTTPS requests, it sets up a secure tunnel to forward encrypted traffic without decrypting it. 
+    For HTTP requests, it forwards the client's request to the target server, retrieves the response, 
     and sends it back to the client.
-
-    :param client_socket: The socket object representing the client connection.
-    :return: None
     """
     try:
-        client_socket.settimeout(TIMEOUT_INTERVAL)
+        client_socket.settimeout(SOCKET_TIMEOUT)
+        
+        # Receive request from client
         request = client_socket.recv(BUFFER_SIZE)
         if not request:
             raise ValueError("Empty request received.")
+
+        # Parse the request to extract target host and port
         try:
             lines = request.split(b'\r\n')
             first_line = lines[0].decode('utf-8')
-            method, full_url, http_version = first_line.split()
+            method, url, _ = first_line.split()
         except Exception:
             client_socket.sendall(b"HTTP/1.1 400 Bad Request\r\n\r\nInvalid request format.")
             return
 
-        # Here we extract Hostname and port from the URL
-        if '://' in full_url:
-            url = full_url.split('://', 1)[1]
-            host_port_path = url.split('/', 1)
-            host_port = host_port_path[0]
-            path = '/' + host_port_path[1] if len(host_port_path) > 1 else '/'
-        else:
-            path = full_url
-            host_port = next((line for line in lines if line.lower().startswith(b'host:')), b'').decode('utf-8').split(': ')[1]
+        # Extract hostname and port from the URL
+        if '://' in url:
+            url = url.split('://')[1]
+        host_port_path = url.split('/', 1)
+        host_port = host_port_path[0]
+        path = '/' + host_port_path[1] if len(host_port_path) > 1 else '/'
 
         if ':' in host_port:
             host, port = host_port.split(':')
@@ -56,18 +49,22 @@ def handle_client(client_socket):
             host = host_port
             port = 443 if method == 'CONNECT' else 80
 
-        # Check if the target host is allowed
-        if not access_control.is_allowed(host):
-            logger.info(f"Blocked request to {host}")
-            client_socket.sendall(b"HTTP/1.1 403 Forbidden\r\n\r\nAccess to this host is not allowed.")
+        # Cache handling for HTTP method GET
+        cache_key = f"{method} {url}"
+        cached_response = check_cache(cache_key)
+        if cached_response:
+            #Serve from cache if available
+            client_socket.sendall(cached_response)
             return
 
-        # HTTPS request handling
+        # Handle HTTPS (CONNECT method)
         if method == 'CONNECT':
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as target_socket:
-                target_socket.settimeout(TIMEOUT_INTERVAL)
+                target_socket.settimeout(SOCKET_TIMEOUT)
                 target_socket.connect((host, port))
                 client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
+
+                # Securely tunnel traffic without decrypting
                 client_to_target = threading.Thread(target=forward_data, args=(client_socket, target_socket))
                 target_to_client = threading.Thread(target=forward_data, args=(target_socket, client_socket))
                 client_to_target.start()
@@ -75,21 +72,27 @@ def handle_client(client_socket):
                 client_to_target.join()
                 target_to_client.join()
         else:
-            # HTTP request handling
+            # Handle HTTP requests
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as target_socket:
-                target_socket.settimeout(TIMEOUT_INTERVAL)
+                target_socket.settimeout(SOCKET_TIMEOUT)
                 target_socket.connect((host, port))
-                updated_request_line = f"{method} {path} {http_version}\r\n".encode('utf-8')
-                updated_request = updated_request_line + b'\r\n'.join(lines[1:])
+                # Modify the request to update the path
+                updated_request = request.replace(url.encode('utf-8'), path.encode('utf-8'), 1)
                 target_socket.sendall(updated_request)
 
-
-                # Here we receive the response from the target server and send all the data to client
+                # Receive response from target server and send to client
+                response = b""
                 while True:
                     data = target_socket.recv(BUFFER_SIZE)
                     if not data:
                         break
                     client_socket.sendall(data)
+                
+                #Cache the response for future requests
+                if method == 'GET':
+                    cache_response(cache_key, response)
+
+
     except socket.timeout:
         client_socket.sendall(b"HTTP/1.1 504 Gateway Timeout\r\n\r\nThe connection timed out.")
     except ValueError as ve:
@@ -99,17 +102,12 @@ def handle_client(client_socket):
     finally:
         client_socket.close()
 
-
 def forward_data(source, destination):
     """
-    This function makes bidirectional data transfer between two sockets easier. It is used
-    mainly for HTTPS tunneling, where encrypted traffic is forwarded between the client
-    and the target server without decryption. The function reads data from the source socket
+    This function facilitates bidirectional data transfer between two sockets. It is used 
+    primarily for HTTPS tunneling, where encrypted traffic is forwarded between the client 
+    and the target server without decryption. The function reads data from the source socket 
     and writes it to the destination socket until the connection is closed.
-
-    :param source: The socket object to read data from.
-    :param destination: The socket object to write data to.
-    :return: None
     """
     try:
         while True:
@@ -118,36 +116,51 @@ def forward_data(source, destination):
                 break
             destination.sendall(data)
     except Exception:
-        pass
+        pass  # Ignore errors during forwarding
     finally:
         source.close()
         destination.close()
 
+def check_cache(key):
+    """
+    Check the cache for a given key and return the cached response if it exists and is not expired.
+    """
+    cached_data = cache.get(key)
+    if cached_data and time.time() - cached_data['timestamp'] < CACHE_TIMEOUT:
+        return cached_data['response']
+    return None
+
+def cach_response(key, response):
+    """
+    Cache the response for a given key, storing the response and timestamp.
+    """
+    cache[key] = {
+        'response': response,
+        'timestamp': time.time()
+    }
 
 def start_proxy():
     """
-    This function initializes and starts the proxy server. It binds to the specified host
-    and port, listens for incoming client connections, and spawns a new thread for each
-    client to handle their requests concurrently. The server runs indefinitely until
+    This function initializes and starts the proxy server. It binds to the specified host 
+    and port, listens for incoming client connections, and spawns a new thread for each 
+    client to handle their requests concurrently. The server runs indefinitely until 
     interrupted by the user.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        server_socket.bind((HOST_IP, PORT_NUMBER))
+        server_socket.bind((HOST, PORT))
         server_socket.listen(5)
-        logger.info(f"[*] Proxy server listening on {HOST_IP}:{PORT_NUMBER}")
+        print(f"[*] Proxy server listening on {HOST}:{PORT}")
 
         while True:
             try:
                 client_socket, addr = server_socket.accept()
-                logger.debug(f"[+] Connection established from {addr}")
+                print(f"[+] Connection established from {addr}")
                 client_thread = threading.Thread(target=handle_client, args=(client_socket,))
                 client_thread.start()
             except KeyboardInterrupt:
-                logger.error("[*] Shutting down server.")
+                print("[*] Shutting down server.")
                 break
 
-
 if __name__ == "__main__":
-    setup_logging()
     start_proxy()
