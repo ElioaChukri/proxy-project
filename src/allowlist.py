@@ -3,6 +3,7 @@
 import ipaddress
 import logging
 from ipaddress import IPv4Network, IPv4Address
+from sys import exit
 
 # Get the logger for the current module
 logger = logging.getLogger('allowlist')
@@ -21,7 +22,12 @@ def _load_list(filepath: str) -> set[str]:
     """
     try:
         with open(filepath, 'r') as f:
-            return set(line.strip() for line in f if line.strip())
+            return set(
+                line.strip()
+                .replace("http://", "")
+                .replace("https://", "")
+                for line in f if line.strip()
+            )
     except FileNotFoundError:
         logger.error("File not found: %s", filepath)
         return set()
@@ -49,10 +55,16 @@ class AccessControl:
         """
         Initialize the AccessControl object with the contents of the whitelist and blacklist files.
         """
-        self._whitelist = _load_list('../whitelist.txt')
-        self._blacklist = _load_list('../blacklist.txt')
-        self._whitelist_cidr = _load_cidr(self._whitelist)
-        self._blacklist_cidr = _load_cidr(self._blacklist)
+
+        try:
+            self._whitelist = _load_list('../whitelist.txt')
+            self._blacklist = _load_list('../blacklist.txt')
+            self._whitelist_cidr = _load_cidr(self._whitelist)
+            self._blacklist_cidr = _load_cidr(self._blacklist)
+        except ValueError:
+            logger.error("Invalid entries found in whitelist/blacklist files. Make sure to only use IP addresses, CIDR ranges, and hostnames (without http:// or https://")
+            exit(1)
+
 
     def is_allowed(self, domain_or_ip: str) -> bool:
         """
