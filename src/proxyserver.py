@@ -135,7 +135,7 @@ def start_proxy():
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((HOST_IP, PORT_NUMBER))
         server_socket.listen(5)
-        logger.info(f"[*] Proxy server listening on {HOST}:{PORT}")
+        logger.info(f"[*] Proxy server listening on {HOST_IP}:{PORT_NUMBER}")
 
         while True:
             try:
