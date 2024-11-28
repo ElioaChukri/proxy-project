@@ -1,9 +1,12 @@
+# Author: Elio Anthony Chucri
+
 import logging
 from logging.handlers import RotatingFileHandler
 
 LOG_LEVEL = logging.INFO
-FORMAT='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-DATEFMT='%Y-%m-%d %H:%M:%S'
+FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+DATEFMT = '%Y-%m-%d %H:%M:%S'
+
 
 def setup_logging() -> None:
     """
@@ -54,6 +57,7 @@ def setup_logging() -> None:
             datefmt=DATEFMT
         )
         logging.error("File logging setup failed. Falling back to console-only logging. Error: %s", e)
+
 
 # Example usage
 if __name__ == '__main__':

@@ -1,10 +1,13 @@
+# Author: Ghady Nasrallah
+
 import socket
 import threading
 
 BUFFER_SIZE = 4096
-HOST_IP= '127.0.0.1'
+HOST_IP = '127.0.0.1'
 PORT_NUMBER = 12345
 TIMEOUT_INTERVAL = 10  # This is the timeout used for all sockets in seconds
+
 
 def handle_client(client_socket):
     """
@@ -14,6 +17,8 @@ def handle_client(client_socket):
     For HTTPS requests, it sets up a secure tunnel to forward encrypted traffic without decrypting it. 
     For HTTP requests, it forwards the client's request to the target server, retrieves the response, 
     and sends it back to the client.
+
+    :param client_socket: The socket object representing the client connection.
     """
     try:
         client_socket.settimeout(TIMEOUT_INTERVAL)
@@ -82,10 +87,11 @@ def handle_client(client_socket):
     finally:
         client_socket.close()
 
+
 def forward_data(source, destination):
     """
-    This function makes bidirectional data transfer between two sockets easier. It is used 
-    mainly for HTTPS tunneling, where encrypted traffic is forwarded between the client 
+    This function makes bidirectional data transfer between two sockets easier. It is used
+    mainly for HTTPS tunneling, where encrypted traffic is forwarded between the client
     and the target server without decryption. The function reads data from the source socket 
     and writes it to the destination socket until the connection is closed.
     """
@@ -96,10 +102,11 @@ def forward_data(source, destination):
                 break
             destination.sendall(data)
     except Exception:
-        pass  
+        pass
     finally:
         source.close()
         destination.close()
+
 
 def start_proxy():
     """
@@ -123,6 +130,7 @@ def start_proxy():
             except KeyboardInterrupt:
                 print("[*] Shutting down server.")
                 break
+
 
 if __name__ == "__main__":
     start_proxy()
