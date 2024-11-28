@@ -2,23 +2,29 @@
 
 import socket
 import threading
+from setup_log import setup_logging
+import logging
+from allowlist import access_control
 
 BUFFER_SIZE = 4096
 HOST_IP = '127.0.0.1'
 PORT_NUMBER = 12345
 TIMEOUT_INTERVAL = 10  # This is the timeout used for all sockets in seconds
 
+logger = logging.getLogger('proxyserver')
+
 
 def handle_client(client_socket):
     """
-    This function handles incoming client requests. It processes both HTTP and HTTPS traffic 
+    This function handles incoming client requests. It processes both HTTP and HTTPS traffic
     by adding the client's request, determining the target server and establishing a connection with it
     in order to forward the request to it.
-    For HTTPS requests, it sets up a secure tunnel to forward encrypted traffic without decrypting it. 
-    For HTTP requests, it forwards the client's request to the target server, retrieves the response, 
+    For HTTPS requests, it sets up a secure tunnel to forward encrypted traffic without decrypting it.
+    For HTTP requests, it forwards the client's request to the target server, retrieves the response,
     and sends it back to the client.
 
     :param client_socket: The socket object representing the client connection.
+    :return: None
     """
     try:
         client_socket.settimeout(TIMEOUT_INTERVAL)
@@ -49,6 +55,12 @@ def handle_client(client_socket):
         else:
             host = host_port
             port = 443 if method == 'CONNECT' else 80
+
+        # Check if the target host is allowed
+        if not access_control.is_allowed(host):
+            logger.info(f"Blocked request to {host}")
+            client_socket.sendall(b"HTTP/1.1 403 Forbidden\r\n\r\nAccess to this host is not allowed.")
+            return
 
         # HTTPS request handling
         if method == 'CONNECT':
@@ -92,8 +104,12 @@ def forward_data(source, destination):
     """
     This function makes bidirectional data transfer between two sockets easier. It is used
     mainly for HTTPS tunneling, where encrypted traffic is forwarded between the client
-    and the target server without decryption. The function reads data from the source socket 
+    and the target server without decryption. The function reads data from the source socket
     and writes it to the destination socket until the connection is closed.
+
+    :param source: The socket object to read data from.
+    :param destination: The socket object to write data to.
+    :return: None
     """
     try:
         while True:
@@ -110,27 +126,28 @@ def forward_data(source, destination):
 
 def start_proxy():
     """
-    This function initializes and starts the proxy server. It binds to the specified host 
-    and port, listens for incoming client connections, and spawns a new thread for each 
-    client to handle their requests concurrently. The server runs indefinitely until 
+    This function initializes and starts the proxy server. It binds to the specified host
+    and port, listens for incoming client connections, and spawns a new thread for each
+    client to handle their requests concurrently. The server runs indefinitely until
     interrupted by the user.
     """
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
         server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server_socket.bind((HOST_IP, PORT_NUMBER))
         server_socket.listen(5)
-        print(f"[*] Proxy server listening on {HOST_IP}:{PORT_NUMBER}")
+        logger.info(f"[*] Proxy server listening on {HOST}:{PORT}")
 
         while True:
             try:
                 client_socket, addr = server_socket.accept()
-                print(f"[+] Connection established from {addr}")
+                logger.debug(f"[+] Connection established from {addr}")
                 client_thread = threading.Thread(target=handle_client, args=(client_socket,))
                 client_thread.start()
             except KeyboardInterrupt:
-                print("[*] Shutting down server.")
+                logger.error("[*] Shutting down server.")
                 break
 
 
 if __name__ == "__main__":
+    setup_logging()
     start_proxy()
