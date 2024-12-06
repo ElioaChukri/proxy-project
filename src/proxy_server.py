@@ -15,7 +15,7 @@ CACHE_TIMEOUT = 60  # Cache expiration time in seconds (for simplicity)
 HOST_IP = '127.0.0.1'
 PORT_NUMBER = 12345
 
-logger = logging.getLogger('proxyserver')
+logger = logging.getLogger('proxy_server')
 
 
 def handle_client(client_socket):

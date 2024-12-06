@@ -8,7 +8,7 @@ BUFFER_SIZE = 4096
 TIMEOUT_INTERVAL = 10  # This is the timeout used for all sockets in seconds
 CACHE_TIMEOUT = 60  # Cache expiration time in seconds (for simplicity)
 
-logger = logging.getLogger('proxyhelpers')
+logger = logging.getLogger('proxy_helpers')
 
 cache = {}
 

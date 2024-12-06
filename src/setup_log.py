@@ -3,7 +3,7 @@
 import logging
 from logging.handlers import RotatingFileHandler
 
-LOG_LEVEL = logging.INFO
+LOG_LEVEL = logging.DEBUG
 FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 DATEFMT = '%Y-%m-%d %H:%M:%S'
 

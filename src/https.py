@@ -58,9 +58,12 @@ def generate_certificate_for_host(hostname) -> str:
     return cert_file
 
 
-def handle_https(client_socket, host, port):
+def handle_https(client_socket, host, port) -> None:
     """
     Handle HTTPS requests by decrypting traffic from the client and forwarding it to the server.
+    :param client_socket: The client socket connected to the proxy.
+    :param host: The hostname of the target server.
+    :param port: The port of the target server.
     """
     try:
         # Send HTTP 200 response to the client
@@ -78,10 +81,9 @@ def handle_https(client_socket, host, port):
 
         # Connect to the target server
         with socket.create_connection((host, port)) as target_socket:
-            logger.debug(f"Connected to {host}:{port}")
             server_context = ssl.create_default_context()
             with server_context.wrap_socket(target_socket, server_hostname=host) as server_tls_socket:
-
+                logger.debug("Forwarding data between client and server")
                 # Forward data between the client and server
                 client_to_server = threading.Thread(target=forward_data, args=(client_tls_socket, server_tls_socket))
                 server_to_client = threading.Thread(target=forward_data, args=(server_tls_socket, client_tls_socket))
