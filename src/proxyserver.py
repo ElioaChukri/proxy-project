@@ -3,20 +3,19 @@
 import logging
 import socket
 import threading
-import time
 
 from allowlist import access_control
+from https import handle_https
+from proxy_helpers import check_cache, cache_response
 from setup_log import setup_logging
 
 BUFFER_SIZE = 4096
-HOST_IP = '127.0.0.1'
-PORT_NUMBER = 12345
 TIMEOUT_INTERVAL = 10  # This is the timeout used for all sockets in seconds
 CACHE_TIMEOUT = 60  # Cache expiration time in seconds (for simplicity)
+HOST_IP = '127.0.0.1'
+PORT_NUMBER = 12345
 
 logger = logging.getLogger('proxyserver')
-
-cache = {}
 
 
 def handle_client(client_socket):
@@ -69,26 +68,21 @@ def handle_client(client_socket):
             return
 
         # Cache handling for HTTP method GET
-        cache_key = f"{method} {full_url}"
+        cache_key = f"{method} {full_url}   "
         cached_response = check_cache(cache_key)
         if cached_response:
             # Serve from cache if available
-            logger.debug(f"Cache hit for {cache_key}")
+            logger.info(f"Cache hit for {cache_key}")
             client_socket.sendall(cached_response)
             return
 
         # HTTPS request handling
         if method == 'CONNECT':
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as target_socket:
-                target_socket.settimeout(TIMEOUT_INTERVAL)
-                target_socket.connect((host, port))
-                client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
-                client_to_target = threading.Thread(target=forward_data, args=(client_socket, target_socket))
-                target_to_client = threading.Thread(target=forward_data, args=(target_socket, client_socket))
-                client_to_target.start()
-                target_to_client.start()
-                client_to_target.join()
-                target_to_client.join()
+            host_port = full_url.split(':')
+            host = host_port[0]
+            port = int(host_port[1]) if len(host_port) > 1 else 443
+            handle_https(client_socket, host, port)
+            return
         else:
             # HTTP request handling
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as target_socket:
@@ -104,6 +98,7 @@ def handle_client(client_socket):
                     if not data:
                         break
                     if method == 'GET':
+                        logger.debug(f"Caching response for {cache_key}")
                         cache_response(cache_key, data)
                     client_socket.sendall(data)
 
@@ -112,53 +107,10 @@ def handle_client(client_socket):
     except ValueError as ve:
         client_socket.sendall(b"HTTP/1.1 400 Bad Request\r\n\r\n" + str(ve).encode('utf-8'))
     except Exception as e:
+        logger.error(f"Error handling client request - {e}")
         client_socket.sendall(b"HTTP/1.1 500 Internal Server Error\r\n\r\nAn error occurred.")
     finally:
         client_socket.close()
-
-
-def forward_data(source, destination):
-    """
-    This function makes bidirectional data transfer between two sockets easier. It is used
-    mainly for HTTPS tunneling, where encrypted traffic is forwarded between the client
-    and the target server without decryption. The function reads data from the source socket
-    and writes it to the destination socket until the connection is closed.
-
-    :param source: The socket object to read data from.
-    :param destination: The socket object to write data to.
-    :return: None
-    """
-    try:
-        while True:
-            data = source.recv(BUFFER_SIZE)
-            if not data:
-                break
-            destination.sendall(data)
-    except Exception:
-        pass
-    finally:
-        source.close()
-        destination.close()
-
-
-def check_cache(key):
-    """
-    Check the cache for a given key and return the cached response if it exists and is not expired.
-    """
-    cached_data = cache.get(key)
-    if cached_data and time.time() - cached_data['timestamp'] < CACHE_TIMEOUT:
-        return cached_data['response']
-    return None
-
-
-def cache_response(key, response):
-    """
-    Cache the response for a given key, storing the response and timestamp.
-    """
-    cache[key] = {
-        'response': response,
-        'timestamp': time.time()
-    }
 
 
 def start_proxy():
