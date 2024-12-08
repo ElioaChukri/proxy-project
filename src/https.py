@@ -135,7 +135,6 @@ def handle_https(client_socket, host, port) -> None:
 
                 # Cache the response if it's a GET request
                 if method.upper() == 'GET':
-                    logger.debug(response)
                     cache_response(cache_key, response)
 
     except socket.timeout:
