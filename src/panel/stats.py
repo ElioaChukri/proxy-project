@@ -1,3 +1,5 @@
+# Author: Ghady Nasrallah
+
 import os
 
 LOG_PATH = "../logs/app.log"

@@ -1,3 +1,5 @@
+# Author: Elio Anthony Chucri
+
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from .get_log import get_logs

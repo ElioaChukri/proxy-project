@@ -1,3 +1,5 @@
+# Author: Bryan El Medawar
+
 from pathlib import Path
 from typing import List
 
