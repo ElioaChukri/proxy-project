@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.responses import RedirectResponse
 
 from .views import admin_page
 from .config import get_whitelist, get_blacklist

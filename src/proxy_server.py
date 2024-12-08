@@ -4,7 +4,7 @@ import logging
 import socket
 import threading
 
-from panel.allowlist import access_control
+from allowlist import access_control
 from https import handle_https
 from proxy_helpers import check_cache, cache_response
 from setup_log import setup_logging
