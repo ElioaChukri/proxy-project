@@ -1,3 +1,5 @@
+// Author: Elio Anthony Chucri
+
 document.getElementById('restart-btn').addEventListener('click', async () => {
     if (confirm("Are you sure you want to restart the server?")) {
 // Send POST request to /restart
