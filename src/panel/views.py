@@ -56,28 +56,7 @@ async def admin_page():
             <h2>Blacklist</h2>
             <pre>{'\n'.join(blacklist)}</pre>
         </section>
-
-        <div class="form-section">
-            <h3>Manage Whitelist</h3>
-            <form action="/whitelist/update" method="post">
-                <textarea name="entries" placeholder="Enter IPs or Domains, One Per Line" rows="4" cols="50"></textarea>
-                <button type="submit">Edit Whitelist</button>
-            </form>
-        </div>
-
-        <div class="form-section">
-            <h3>Manage Blacklist</h3>
-            <form action="/blacklist/update" method="post">
-                <textarea name="entries" placeholder="Enter IPs or Domains, One Per Line" rows="4" cols="50"></textarea>
-                <button type="submit">Edit Blacklist</button>
-            </form>
-        </div>
         
-        <div class="form-section">
-            <div>
-                <button id="restart-btn">Restart Server</button>
-            </div>
-    </div>
     <footer>
         <p>&copy; 2024 Proxy Admin Panel. All Rights Reserved.</p>
     </footer>

@@ -1,6 +1,5 @@
 from pathlib import Path
 from typing import List
-from .allowlist import access_control
 
 WHITELIST_PATH = Path("../whitelist.txt")
 BLACKLIST_PATH = Path("../blacklist.txt")
@@ -25,7 +24,6 @@ def update_whitelist(entries: str) -> dict:
     with open(WHITELIST_PATH, 'w') as f:
         for line in lines:
             f.write(f"{line.strip()}\n")
-    access_control.refresh_whitelist()
     return {"message": "Whitelist updated successfully."}
 
 
@@ -48,5 +46,4 @@ def update_blacklist(entries: str) -> dict:
     with open(BLACKLIST_PATH, 'w') as f:
         for line in lines:
             f.write(f"{line.strip()}\n")
-    access_control.refresh_blacklist()
     return {"message": "Blacklist updated successfully."}

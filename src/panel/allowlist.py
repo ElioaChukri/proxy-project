@@ -111,21 +111,5 @@ class AccessControl:
         logger.debug(f'{domain_or_ip} is not in either list, allowing by default')
         return True  # Default to allowing access if not found in either list
 
-    def refresh_whitelist(self):
-        """
-        Refresh the whitelist by reloading the whitelist file.
-        """
-        logger.debug("Refreshing whitelist")
-        self._whitelist = _load_list('../whitelist.txt')
-        self._whitelist_cidr = _load_cidr(self._whitelist)
-
-    def refresh_blacklist(self):
-        """
-        Refresh the blacklist by reloading the blacklist file.
-        """
-        logger.debug("Refreshing blacklist")
-        self._blacklist = _load_list('../blacklist.txt')
-        self._blacklist_cidr = _load_cidr(self._blacklist)
-
 # Instantiate a global object to access from other modules
 access_control = AccessControl()
