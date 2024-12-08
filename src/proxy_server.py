@@ -4,7 +4,7 @@ import logging
 import socket
 import threading
 
-from allowlist import access_control
+from panel.allowlist import access_control
 from https import handle_https
 from proxy_helpers import check_cache, cache_response
 from setup_log import setup_logging
@@ -60,6 +60,11 @@ def handle_client(client_socket):
         else:
             host = host_port
             port = 443 if method == 'CONNECT' else 80
+
+        if host == 'localhost' or host == '127.0.0.1':
+            client_socket.sendall(b"HTTP/1.1 403 Forbidden\r\n\r\nAccess to localhost is not allowed.")
+            return
+
 
         # Check if the target host is allowed
         if not access_control.is_allowed(host):

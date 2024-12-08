@@ -1,19 +1,26 @@
 import logging
+from multiprocessing import Process
 
-from allowlist import access_control
+import uvicorn
+
+from proxy_server import start_proxy
 from setup_log import setup_logging
 
+setup_logging()
+logger = logging.getLogger('main')
+
+
+def start_admin_interface():
+    """
+    Start the admin interface for the proxy server.
+    """
+    logger.info("Starting admin interface on http://localhost:8000")
+    uvicorn.run("panel.interface:app", host="localhost", port=8000)
+
+
 if __name__ == '__main__':
+    # Start the admin interface in a separate process
+    admin_interface_process = Process(target=start_admin_interface).start()
 
-    # Function to set up the global logger
-    setup_logging()
-
-    # Get the logger for current module
-    logger = logging.getLogger('main')
-
-    # Example usage
-    ip = '192.168.1.1'
-    if access_control.is_allowed(ip):
-        logger.info(f'{ip} is allowed')
-    else:
-        logger.info(f'{ip} is not allowed')
+    # Start the proxy server in the main process
+    start_proxy()
