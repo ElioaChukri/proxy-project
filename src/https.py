@@ -3,10 +3,12 @@
 import logging
 import socket
 import ssl
-import threading
 import time
 from OpenSSL import crypto
-from proxy_helpers import forward_data
+from proxy_helpers import check_cache, cache_response
+
+BUFFER_SIZE = 4096
+TIMEOUT_INTERVAL = 10  # This is the timeout used for all sockets in seconds
 
 # Create a logger for the HTTPS module
 logger = logging.getLogger('https')
@@ -57,10 +59,10 @@ def generate_certificate_for_host(hostname) -> str:
 
     return cert_file
 
-
 def handle_https(client_socket, host, port) -> None:
     """
     Handle HTTPS requests by decrypting traffic from the client and forwarding it to the server.
+    Implements caching for HTTPS GET requests.
     :param client_socket: The client socket connected to the proxy.
     :param host: The hostname of the target server.
     :param port: The port of the target server.
@@ -83,20 +85,72 @@ def handle_https(client_socket, host, port) -> None:
         with socket.create_connection((host, port)) as target_socket:
             server_context = ssl.create_default_context()
             with server_context.wrap_socket(target_socket, server_hostname=host) as server_tls_socket:
-                logger.debug("Forwarding data between client and server")
-                # Forward data between the client and server
-                client_to_server = threading.Thread(target=forward_data, args=(client_tls_socket, server_tls_socket))
-                server_to_client = threading.Thread(target=forward_data, args=(server_tls_socket, client_tls_socket))
-                client_to_server.start()
-                server_to_client.start()
-                client_to_server.join()
-                server_to_client.join()
+                # Set timeouts
+                client_tls_socket.settimeout(TIMEOUT_INTERVAL)
+                server_tls_socket.settimeout(TIMEOUT_INTERVAL)
 
-    except Exception as e:
-        logger.error(f"Error handling HTTPS for {host}:{port} - {e}")
+                # Read the HTTP request from the client
+                request = b""
+                while True:
+                    data = client_tls_socket.recv(BUFFER_SIZE)
+                    if not data:
+                        break
+                    request += data
+                    if b'\r\n\r\n' in request:
+                        break
+
+                if not request:
+                    return
+
+                # Parse the HTTP request
+                try:
+                    request_lines = request.split(b'\r\n')
+                    request_line = request_lines[0].decode('utf-8')
+                    method, path, http_version = request_line.split()
+
+                    # Only cache GET requests
+                    if method.upper() == 'GET':
+                        cache_key = f"HTTPS {host}{path}"
+                        cached_response = check_cache(cache_key)
+                        if cached_response:
+                            logger.info(f"HTTPS Cache hit for {cache_key}")
+                            client_tls_socket.sendall(cached_response)
+                            return
+                except Exception as e:
+                    logger.error(f"Failed to parse HTTPS request: {e}")
+                    client_tls_socket.sendall(b"HTTP/1.1 400 Bad Request\r\n\r\nInvalid HTTPS request format.")
+                    return
+
+                # Forward the request to the target server
+                server_tls_socket.sendall(request)
+
+                # Receive the response from the server
+                response = b""
+                while True:
+                    data = server_tls_socket.recv(BUFFER_SIZE)
+                    if not data:
+                        break
+                    response += data
+                    client_tls_socket.sendall(data)
+
+                # Cache the response if it's a GET request
+                if method.upper() == 'GET':
+                    logger.debug(response)
+                    cache_response(cache_key, response)
+
+    except socket.timeout:
         try:
-            client_socket.sendall(b"HTTP/1.1 500 Internal Server Error\r\n\r\n")
+            client_socket.sendall(b"HTTP/1.1 504 Gateway Timeout\r\n\r\nThe connection timed out.")
         except Exception:
-            logger.error("Failed to send error response to client.")
+            pass
+            # logger.error("Failed to send timeout response to client.")
+    except Exception as e:
+        pass
+        # logger.error(f"Error handling HTTPS for {host}:{port} - {e}")
+        try:
+            client_socket.sendall(b"HTTP/1.1 500 Internal Server Error\r\n\r\nAn error occurred.")
+        except Exception:
+            pass
+            # logger.error("Failed to send error response to client.")
     finally:
         client_socket.close()
